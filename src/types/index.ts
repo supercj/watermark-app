@@ -1,38 +1,83 @@
+// 位置锚点（九宫格）
+export type AnchorPosition =
+  | 'top-left' | 'top-center' | 'top-right'
+  | 'center-left' | 'center' | 'center-right'
+  | 'bottom-left' | 'bottom-center' | 'bottom-right';
+
 // 水印类型
 export interface WatermarkConfig {
   id: string;
   type: 'text' | 'image';
-  // 文字内容（文字水印）
+  // 位置：锚点 + 偏移
+  anchor: AnchorPosition;
+  offsetX: number;
+  offsetY: number;
+  // 文字内容
   text?: string;
   fontSize?: number;
   fontFamily?: string;
   fontWeight?: 'normal' | 'bold';
   fontStyle?: 'normal' | 'italic';
   color?: string;
-  // 图片路径（图片水印）
+  // 图片路径
   imagePath?: string;
   // 通用属性
-  x: number;
-  y: number;
   width: number;
   height: number;
   opacity: number;
   rotation: number;
 }
 
-// 模板分类
-export type TemplateCategory = 'basic' | 'date' | 'location' | 'copyright' | 'custom';
+// 边框信息栏模板的布局方式
+export type FrameLayout = 'brand-left' | 'brand-center' | 'minimal' | 'magazine';
 
-// 水印模板
+// 边框信息栏配置（作为可拖拽的组合块）
+export interface FrameConfig {
+  id: string;
+  layout: FrameLayout;
+  // 位置（整体可拖拽）
+  anchor: AnchorPosition;
+  offsetX: number;
+  offsetY: number;
+  // 外观
+  backgroundColor: string;
+  padding: number;
+  borderRadius: number;
+  // 品牌信息
+  brandText: string;
+  brandFontSize: number;
+  brandColor: string;
+  brandFontWeight: 'normal' | 'bold';
+  // 拍摄参数
+  showParams: boolean;
+  paramText: string;
+  paramFontSize: number;
+  paramColor: string;
+  // 日期
+  showDate: boolean;
+  dateFormat: string;
+  dateColor: string;
+  dateFontSize: number;
+  // 分隔线
+  showDivider: boolean;
+  dividerColor: string;
+}
+
+// 模板分类
+export type TemplateCategory = 'frame' | 'overlay' | 'custom';
+
+// 水印模板（支持两种模式：边框模板 和 叠加水印模板）
 export interface WatermarkTemplate {
   id: string;
   name: string;
   description: string;
   category: TemplateCategory;
-  watermarks: WatermarkConfig[];
-  // 预览图（base64 或 URL）
-  preview?: string;
-  // 是否为内置模板
+  // 模板类型
+  mode: 'frame' | 'overlay';
+  // 边框模式的配置
+  frameConfig?: FrameConfig;
+  // 叠加模式的水印列表
+  watermarks?: WatermarkConfig[];
   isBuiltIn?: boolean;
   createdAt: number;
   updatedAt: number;
@@ -51,15 +96,10 @@ export interface ImageItem {
 // 导出设置
 export interface ExportSettings {
   format: 'jpg' | 'png' | 'webp';
-  quality: number; // 1-100
+  quality: number;
   outputFolder: string;
   preserveOriginal: boolean;
 }
 
-// 应用状态
-export interface AppState {
-  images: ImageItem[];
-  currentImageIndex: number;
-  watermarkTemplate: WatermarkTemplate | null;
-  exportSettings: ExportSettings;
-}
+// 移动端底部 Tab
+export type MobileTab = 'images' | 'watermark' | 'export';

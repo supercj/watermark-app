@@ -17,8 +17,8 @@ export function ExportPanel({
 }: Props) {
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [expanded, setExpanded] = useState(false);
 
-  // 选择输出目录
   const handleSelectFolder = useCallback(async () => {
     const folder = await electronAPI.selectSaveFolder();
     if (folder) {
@@ -26,28 +26,15 @@ export function ExportPanel({
     }
   }, [settings, onSettingsChange]);
 
-  // 开始导出
   const handleExport = useCallback(async () => {
-    if (images.length === 0) {
-      alert('请先添加图片');
-      return;
-    }
-    if (watermarks.length === 0) {
-      alert('请先添加水印');
-      return;
-    }
-    if (!settings.outputFolder) {
-      alert('请选择输出目录');
-      return;
-    }
+    if (images.length === 0) { alert('请先添加图片'); return; }
+    if (watermarks.length === 0) { alert('请先添加水印'); return; }
+    if (!settings.outputFolder) { alert('请选择输出目录'); return; }
 
     setExporting(true);
     setProgress(0);
 
-    // TODO: 实现实际的导出逻辑
-    // 这里需要使用 Canvas 合成图片和水印
     for (let i = 0; i < images.length; i++) {
-      // 模拟处理进度
       await new Promise((r) => setTimeout(r, 100));
       setProgress(Math.round(((i + 1) / images.length) * 100));
     }
@@ -58,55 +45,48 @@ export function ExportPanel({
 
   return (
     <div className="export-panel">
-      <h3>导出设置</h3>
-      
-      <div className="setting-item">
-        <label>输出格式:</label>
-        <select
-          value={settings.format}
-          onChange={(e) =>
-            onSettingsChange({ ...settings, format: e.target.value as ExportSettings['format'] })
-          }
-        >
-          <option value="jpg">JPG</option>
-          <option value="png">PNG</option>
-          <option value="webp">WebP</option>
-        </select>
+      <div className="export-header" onClick={() => setExpanded(!expanded)}>
+        <span className="export-title">导出</span>
+        <span className="export-toggle">{expanded ? '▾' : '▸'}</span>
       </div>
 
-      <div className="setting-item">
-        <label>图片质量:</label>
-        <input
-          type="range"
-          value={settings.quality}
-          onChange={(e) =>
-            onSettingsChange({ ...settings, quality: Number(e.target.value) })
-          }
-          min={1}
-          max={100}
-        />
-        <span>{settings.quality}%</span>
-      </div>
-
-      <div className="setting-item">
-        <label>输出目录:</label>
-        <button onClick={handleSelectFolder} className="btn-secondary">
-          {settings.outputFolder || '选择目录'}
-        </button>
-      </div>
-
-      <div className="setting-item">
-        <label>
+      {expanded && (
+        <div className="export-settings">
+          <div className="export-row">
+            <label>格式</label>
+            <select
+              value={settings.format}
+              onChange={(e) => onSettingsChange({ ...settings, format: e.target.value as ExportSettings['format'] })}
+            >
+              <option value="jpg">JPG</option>
+              <option value="png">PNG</option>
+              <option value="webp">WebP</option>
+            </select>
+            <label>质量</label>
+            <span className="quality-val">{settings.quality}%</span>
+          </div>
           <input
-            type="checkbox"
-            checked={settings.preserveOriginal}
-            onChange={(e) =>
-              onSettingsChange({ ...settings, preserveOriginal: e.target.checked })
-            }
+            type="range"
+            value={settings.quality}
+            onChange={(e) => onSettingsChange({ ...settings, quality: Number(e.target.value) })}
+            min={1} max={100}
+            className="quality-slider"
           />
-          保留原始文件名
-        </label>
-      </div>
+          <div className="export-row">
+            <button onClick={handleSelectFolder} className="btn-secondary btn-sm export-folder-btn">
+              {settings.outputFolder ? settings.outputFolder.split(/[/\\]/).pop() : '选择目录'}
+            </button>
+            <label className="checkbox-inline">
+              <input
+                type="checkbox"
+                checked={settings.preserveOriginal}
+                onChange={(e) => onSettingsChange({ ...settings, preserveOriginal: e.target.checked })}
+              />
+              保留原名
+            </label>
+          </div>
+        </div>
+      )}
 
       {exporting && (
         <div className="progress">
@@ -118,9 +98,9 @@ export function ExportPanel({
       <button
         onClick={handleExport}
         disabled={exporting || images.length === 0}
-        className="btn-primary btn-large"
+        className="btn-primary btn-full btn-export"
       >
-        {exporting ? '导出中...' : `导出 (${images.length} 张图片)`}
+        {exporting ? '导出中...' : `导出 (${images.length} 张)`}
       </button>
     </div>
   );

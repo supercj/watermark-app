@@ -2,442 +2,532 @@ import { useState, useCallback, useEffect } from 'react';
 import { electronAPI } from '../lib/electron-api';
 import {
   getAllTemplates,
-  loadCustomTemplates,
   saveCustomTemplate,
   deleteCustomTemplate,
   processWatermarks,
-  categoryNames,
-  categoryIcons,
   generateId,
+  formatDate,
 } from '../lib/templates';
-import type { WatermarkConfig, WatermarkTemplate, TemplateCategory } from '../types';
+import { anchorNames, calculatePosition } from '../lib/position';
+import type {
+  WatermarkConfig,
+  WatermarkTemplate,
+  FrameConfig,
+  AnchorPosition,
+  TemplateCategory,
+} from '../types';
 
 interface Props {
   watermarks: WatermarkConfig[];
   onWatermarksChange: (watermarks: WatermarkConfig[]) => void;
+  selectedWatermarkId: string | null;
+  onSelectWatermark: (id: string | null) => void;
+  // 边框模板
+  frameConfig: FrameConfig | null;
+  onFrameConfigChange: (config: FrameConfig | null) => void;
 }
 
-// 可用字体列表
 const FONTS = [
-  'Microsoft YaHei',
-  'SimHei',
-  'SimSun',
-  'KaiTi',
-  'FangSong',
-  'Arial',
-  'Times New Roman',
-  'Georgia',
-  'Verdana',
-  'Courier New',
+  'Microsoft YaHei', 'SimHei', 'SimSun', 'KaiTi',
+  'Arial', 'Times New Roman', 'Georgia',
 ];
 
-export function WatermarkPanel({ watermarks, onWatermarksChange }: Props) {
-  // 当前选中的分类
-  const [activeCategory, setActiveCategory] = useState<TemplateCategory>('basic');
-  
-  // 模板列表
-  const [templates, setTemplates] = useState<WatermarkTemplate[]>([]);
-  
-  // 文字水印状态
-  const [textValue, setTextValue] = useState('');
-  const [fontSize, setFontSize] = useState(32);
-  const [fontFamily, setFontFamily] = useState('Microsoft YaHei');
-  const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>('normal');
-  const [fontStyle, setFontStyle] = useState<'normal' | 'italic'>('normal');
-  const [color, setColor] = useState('#ffffff');
-  const [opacity, setOpacity] = useState(0.8);
+const ANCHOR_GRID: AnchorPosition[] = [
+  'top-left', 'top-center', 'top-right',
+  'center-left', 'center', 'center-right',
+  'bottom-left', 'bottom-center', 'bottom-right',
+];
 
-  // 图片水印状态
-  const [imageOpacity, setImageOpacity] = useState(0.8);
-
-  // 保存模板对话框
+export function WatermarkPanel({
+  watermarks,
+  onWatermarksChange,
+  selectedWatermarkId,
+  onSelectWatermark,
+  frameConfig,
+  onFrameConfigChange,
+}: Props) {
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [templates, setTemplates] = useState<WatermarkTemplate[]>([]);
   const [newTemplateName, setNewTemplateName] = useState('');
-  const [newTemplateDesc, setNewTemplateDesc] = useState('');
+  const [templateFilter, setTemplateFilter] = useState<TemplateCategory | 'all'>('all');
 
-  // 加载模板
   useEffect(() => {
     setTemplates(getAllTemplates());
   }, []);
 
-  // 按分类筛选模板
-  const filteredTemplates = templates.filter((t) => t.category === activeCategory);
+  const selectedWatermark = watermarks.find((w) => w.id === selectedWatermarkId) || null;
 
-  // 应用模板
-  const handleApplyTemplate = useCallback((template: WatermarkTemplate) => {
-    const processed = processWatermarks(template.watermarks);
-    onWatermarksChange(processed);
-  }, [onWatermarksChange]);
-
-  // 清空水印
-  const handleClearWatermarks = useCallback(() => {
-    onWatermarksChange([]);
-  }, [onWatermarksChange]);
-
-  // 添加文字水印
+  // 快速添加文字水印
   const handleAddText = useCallback(() => {
-    if (!textValue.trim()) return;
-
-    const newWatermark: WatermarkConfig = {
+    const wm: WatermarkConfig = {
       id: generateId(),
       type: 'text',
-      text: textValue,
-      fontSize,
-      fontFamily,
-      fontWeight,
-      fontStyle,
-      color,
-      opacity,
-      x: 50,
-      y: 50,
-      width: textValue.length * fontSize * 0.6,
-      height: fontSize,
+      text: '水印文字',
+      anchor: 'center',
+      offsetX: 0,
+      offsetY: 0,
+      fontSize: 32,
+      fontFamily: 'Microsoft YaHei',
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      color: '#ffffff',
+      width: 150,
+      height: 40,
+      opacity: 0.8,
       rotation: 0,
     };
+    onWatermarksChange([...watermarks, wm]);
+    onSelectWatermark(wm.id);
+  }, [watermarks, onWatermarksChange, onSelectWatermark]);
 
-    onWatermarksChange([...watermarks, newWatermark]);
-    setTextValue('');
-  }, [textValue, fontSize, fontFamily, fontWeight, fontStyle, color, opacity, watermarks, onWatermarksChange]);
+  // 快速添加日期
+  const handleAddDate = useCallback(() => {
+    const wm: WatermarkConfig = {
+      id: generateId(),
+      type: 'text',
+      text: formatDate('YYYY-MM-DD'),
+      anchor: 'bottom-right',
+      offsetX: 30,
+      offsetY: 30,
+      fontSize: 20,
+      fontFamily: 'Microsoft YaHei',
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      color: '#ffffff',
+      width: 140,
+      height: 25,
+      opacity: 0.8,
+      rotation: 0,
+    };
+    onWatermarksChange([...watermarks, wm]);
+    onSelectWatermark(wm.id);
+  }, [watermarks, onWatermarksChange, onSelectWatermark]);
+
+  // 快速添加版权
+  const handleAddCopyright = useCallback(() => {
+    const wm: WatermarkConfig = {
+      id: generateId(),
+      type: 'text',
+      text: '© 版权所有',
+      anchor: 'bottom-left',
+      offsetX: 30,
+      offsetY: 30,
+      fontSize: 16,
+      fontFamily: 'Microsoft YaHei',
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      color: '#ffffff',
+      width: 120,
+      height: 20,
+      opacity: 0.8,
+      rotation: 0,
+    };
+    onWatermarksChange([...watermarks, wm]);
+    onSelectWatermark(wm.id);
+  }, [watermarks, onWatermarksChange, onSelectWatermark]);
 
   // 添加图片水印
   const handleAddImage = useCallback(async () => {
     const imagePath = await electronAPI.selectWatermarkImage();
     if (!imagePath) return;
-
-    const newWatermark: WatermarkConfig = {
+    const wm: WatermarkConfig = {
       id: generateId(),
       type: 'image',
       imagePath,
-      x: 50,
-      y: 50,
+      anchor: 'center',
+      offsetX: 0,
+      offsetY: 0,
       width: 100,
       height: 100,
-      opacity: imageOpacity,
+      opacity: 0.8,
       rotation: 0,
     };
-
-    onWatermarksChange([...watermarks, newWatermark]);
-  }, [imageOpacity, watermarks, onWatermarksChange]);
+    onWatermarksChange([...watermarks, wm]);
+    onSelectWatermark(wm.id);
+  }, [watermarks, onWatermarksChange, onSelectWatermark]);
 
   // 删除水印
   const handleRemove = useCallback((id: string) => {
     onWatermarksChange(watermarks.filter((w) => w.id !== id));
-  }, [watermarks, onWatermarksChange]);
+    if (selectedWatermarkId === id) onSelectWatermark(null);
+  }, [watermarks, onWatermarksChange, selectedWatermarkId, onSelectWatermark]);
 
-  // 更新水印属性
-  const handleUpdateWatermark = useCallback((id: string, updates: Partial<WatermarkConfig>) => {
+  // 清空
+  const handleClear = useCallback(() => {
+    onWatermarksChange([]);
+    onFrameConfigChange(null);
+    onSelectWatermark(null);
+  }, [onWatermarksChange, onFrameConfigChange, onSelectWatermark]);
+
+  // 更新选中水印属性
+  const updateSelected = useCallback((updates: Partial<WatermarkConfig>) => {
+    if (!selectedWatermarkId) return;
     onWatermarksChange(
-      watermarks.map((wm) => (wm.id === id ? { ...wm, ...updates } : wm))
+      watermarks.map((wm) => (wm.id === selectedWatermarkId ? { ...wm, ...updates } : wm))
     );
-  }, [watermarks, onWatermarksChange]);
+  }, [watermarks, onWatermarksChange, selectedWatermarkId]);
+
+  // 更新边框配置
+  const updateFrame = useCallback((updates: Partial<FrameConfig>) => {
+    if (!frameConfig) return;
+    onFrameConfigChange({ ...frameConfig, ...updates });
+  }, [frameConfig, onFrameConfigChange]);
+
+  // 应用模板
+  const handleApplyTemplate = useCallback((template: WatermarkTemplate) => {
+    if (template.mode === 'frame' && template.frameConfig) {
+      // 边框模板：设置边框配置，清空叠加水印
+      onFrameConfigChange({ ...template.frameConfig, id: generateId() });
+      onWatermarksChange([]);
+    } else if (template.mode === 'overlay' && template.watermarks) {
+      // 叠加水印模板
+      const processed = processWatermarks(template.watermarks);
+      onFrameConfigChange(null);
+      onWatermarksChange(processed);
+    }
+    onSelectWatermark(null);
+    setShowTemplateDialog(false);
+  }, [onWatermarksChange, onFrameConfigChange, onSelectWatermark]);
 
   // 保存为模板
   const handleSaveTemplate = useCallback(() => {
-    if (!newTemplateName.trim() || watermarks.length === 0) return;
-
+    if (!newTemplateName.trim()) return;
     const now = Date.now();
     const template: WatermarkTemplate = {
       id: `custom-${now}`,
       name: newTemplateName.trim(),
-      description: newTemplateDesc.trim() || '自定义模板',
+      description: '自定义模板',
       category: 'custom',
-      watermarks: [...watermarks],
+      mode: frameConfig ? 'frame' : 'overlay',
+      frameConfig: frameConfig || undefined,
+      watermarks: frameConfig ? undefined : [...watermarks],
       isBuiltIn: false,
       createdAt: now,
       updatedAt: now,
     };
-
     saveCustomTemplate(template);
     setTemplates(getAllTemplates());
     setShowSaveDialog(false);
     setNewTemplateName('');
-    setNewTemplateDesc('');
-    setActiveCategory('custom');
-  }, [newTemplateName, newTemplateDesc, watermarks]);
+  }, [newTemplateName, watermarks, frameConfig]);
 
-  // 删除自定义模板
+  // 删除模板
   const handleDeleteTemplate = useCallback((id: string) => {
     deleteCustomTemplate(id);
     setTemplates(getAllTemplates());
   }, []);
 
-  // 分类列表
-  const categories: TemplateCategory[] = ['basic', 'date', 'location', 'copyright', 'custom'];
+  // 筛选模板
+  const filteredTemplates = templateFilter === 'all'
+    ? templates
+    : templates.filter((t) => t.category === templateFilter);
 
   return (
     <div className="watermark-panel">
-      <h3>水印设计</h3>
-
-      {/* 模板选择区 */}
-      <div className="template-section">
-        <div className="section-header">
-          <h4>模板库</h4>
-          {watermarks.length > 0 && (
-            <button className="btn-link" onClick={() => setShowSaveDialog(true)}>
-              保存为模板
-            </button>
-          )}
-        </div>
-
-        {/* 分类标签 */}
-        <div className="category-tabs">
-          {categories.map((cat) => {
-            const count = templates.filter((t) => t.category === cat).length;
-            return (
-              <button
-                key={cat}
-                className={`category-tab ${activeCategory === cat ? 'active' : ''}`}
-                onClick={() => setActiveCategory(cat)}
-              >
-                <span className="cat-icon">{categoryIcons[cat]}</span>
-                <span className="cat-name">{categoryNames[cat]}</span>
-                <span className="cat-count">{count}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* 模板列表 */}
-        <div className="template-grid">
-          {filteredTemplates.map((template) => (
-            <div
-              key={template.id}
-              className="template-card"
-              onClick={() => handleApplyTemplate(template)}
-            >
-              <div className="template-preview">
-                <div className="preview-content">
-                  {template.watermarks.map((wm, idx) => (
-                    <div
-                      key={idx}
-                      className={`preview-item ${wm.type}`}
-                      style={{
-                        left: `${(wm.x / 800) * 100}%`,
-                        top: `${(wm.y / 600) * 100}%`,
-                        fontSize: `${Math.min(wm.fontSize || 16, 16)}px`,
-                        color: wm.color || '#fff',
-                        opacity: wm.opacity,
-                        transform: `rotate(${wm.rotation || 0}deg)`,
-                      }}
-                    >
-                      {wm.type === 'text' ? (
-                        <span>{wm.text?.substring(0, 8)}</span>
-                      ) : (
-                        <span className="img-icon">🖼️</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="template-info">
-                <span className="template-name">{template.name}</span>
-                <span className="template-desc">{template.description}</span>
-                {!template.isBuiltIn && (
-                  <button
-                    className="btn-delete-template"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteTemplate(template.id);
-                    }}
-                    title="删除模板"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-          {filteredTemplates.length === 0 && (
-            <div className="empty-templates">
-              <p>暂无模板</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 水印操作区 */}
-      <div className="watermark-actions">
-        <div className="action-header">
-          <h4>添加水印</h4>
-          {watermarks.length > 0 && (
-            <button className="btn-link btn-danger" onClick={handleClearWatermarks}>
-              清空全部
-            </button>
-          )}
-        </div>
-
-        {/* 文字水印 */}
-        <div className="action-section">
-          <div className="action-title">文字水印</div>
-          <input
-            type="text"
-            placeholder="输入水印文字"
-            value={textValue}
-            onChange={(e) => setTextValue(e.target.value)}
-            className="input-full"
-          />
-          <div className="form-row">
-            <div className="form-item">
-              <label>字号</label>
-              <input
-                type="number"
-                value={fontSize}
-                onChange={(e) => setFontSize(Number(e.target.value))}
-                min={12}
-                max={200}
-              />
-            </div>
-            <div className="form-item">
-              <label>颜色</label>
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-item full">
-              <label>字体</label>
-              <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)}>
-                {FONTS.map((f) => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="form-row checkbox-row">
-            <label>
-              <input
-                type="checkbox"
-                checked={fontWeight === 'bold'}
-                onChange={(e) => setFontWeight(e.target.checked ? 'bold' : 'normal')}
-              />
-              加粗
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={fontStyle === 'italic'}
-                onChange={(e) => setFontStyle(e.target.checked ? 'italic' : 'normal')}
-              />
-              斜体
-            </label>
-          </div>
-          <div className="form-row">
-            <div className="form-item full">
-              <label>透明度: {opacity.toFixed(1)}</label>
-              <input
-                type="range"
-                value={opacity}
-                onChange={(e) => setOpacity(Number(e.target.value))}
-                min={0}
-                max={1}
-                step={0.1}
-              />
-            </div>
-          </div>
-          <button onClick={handleAddText} className="btn-primary btn-full">
-            添加文字水印
+      {/* 快速添加 */}
+      <div className="quick-add">
+        <div className="section-title">快速添加</div>
+        <div className="quick-add-buttons">
+          <button className="quick-btn" onClick={handleAddText}>
+            <span className="quick-icon">T</span><span>文字</span>
           </button>
-        </div>
-
-        {/* 图片水印 */}
-        <div className="action-section">
-          <div className="action-title">图片水印</div>
-          <div className="form-row">
-            <div className="form-item full">
-              <label>透明度: {imageOpacity.toFixed(1)}</label>
-              <input
-                type="range"
-                value={imageOpacity}
-                onChange={(e) => setImageOpacity(Number(e.target.value))}
-                min={0}
-                max={1}
-                step={0.1}
-              />
-            </div>
-          </div>
-          <button onClick={handleAddImage} className="btn-secondary btn-full">
-            选择水印图片
+          <button className="quick-btn" onClick={handleAddDate}>
+            <span className="quick-icon">📅</span><span>日期</span>
+          </button>
+          <button className="quick-btn" onClick={handleAddCopyright}>
+            <span className="quick-icon">©</span><span>版权</span>
+          </button>
+          <button className="quick-btn" onClick={handleAddImage}>
+            <span className="quick-icon">🖼</span><span>图片</span>
           </button>
         </div>
       </div>
 
-      {/* 已添加水印列表 */}
+      {/* 边框模板编辑（如果激活） */}
+      {frameConfig && (
+        <div className="frame-editor">
+          <div className="section-title-row">
+            <span className="section-title">边框信息栏</span>
+            <button className="btn-link btn-danger" onClick={() => onFrameConfigChange(null)}>移除</button>
+          </div>
+          <div className="frame-fields">
+            <div className="prop-field full">
+              <label>品牌文字</label>
+              <input
+                type="text"
+                value={frameConfig.brandText}
+                onChange={(e) => updateFrame({ brandText: e.target.value })}
+              />
+            </div>
+            <div className="prop-row-inline">
+              <div className="prop-field">
+                <label>背景色</label>
+                <input
+                  type="color"
+                  value={frameConfig.backgroundColor}
+                  onChange={(e) => updateFrame({ backgroundColor: e.target.value })}
+                />
+              </div>
+              <div className="prop-field">
+                <label>品牌色</label>
+                <input
+                  type="color"
+                  value={frameConfig.brandColor}
+                  onChange={(e) => updateFrame({ brandColor: e.target.value })}
+                />
+              </div>
+            </div>
+            {frameConfig.showParams && (
+              <div className="prop-field full">
+                <label>拍摄参数</label>
+                <input
+                  type="text"
+                  value={frameConfig.paramText}
+                  onChange={(e) => updateFrame({ paramText: e.target.value })}
+                  placeholder="50mm f/1.8 1/125s ISO100"
+                />
+              </div>
+            )}
+            <div className="prop-row-inline checkbox-row">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={frameConfig.showParams}
+                  onChange={(e) => updateFrame({ showParams: e.target.checked })}
+                /> 参数
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={frameConfig.showDate}
+                  onChange={(e) => updateFrame({ showDate: e.target.checked })}
+                /> 日期
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={frameConfig.showDivider}
+                  onChange={(e) => updateFrame({ showDivider: e.target.checked })}
+                /> 分隔线
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 叠加水印列表 */}
       {watermarks.length > 0 && (
-        <div className="watermark-list-section">
-          <h4>当前水印 ({watermarks.length})</h4>
-          <div className="watermark-list">
-            {watermarks.map((wm, index) => (
-              <div key={wm.id} className="watermark-item">
-                <div className="wm-index">{index + 1}</div>
-                <div className="wm-info">
-                  <span className="wm-type-tag">{wm.type === 'text' ? '文字' : '图片'}</span>
-                  <span className="wm-content">
-                    {wm.type === 'text' ? wm.text : '水印图片'}
-                  </span>
-                </div>
-                <div className="wm-actions">
-                  <input
-                    type="range"
-                    value={wm.opacity}
-                    onChange={(e) => handleUpdateWatermark(wm.id, { opacity: Number(e.target.value) })}
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    className="mini-range"
-                    title="透明度"
-                  />
-                  <button
-                    className="btn-icon btn-remove"
-                    onClick={() => handleRemove(wm.id)}
-                    title="删除"
-                  >
-                    ×
-                  </button>
-                </div>
+        <div className="wm-list-section">
+          <div className="section-title-row">
+            <span className="section-title">叠加水印 ({watermarks.length})</span>
+            <button className="btn-link btn-danger" onClick={handleClear}>清空</button>
+          </div>
+          <div className="wm-compact-list">
+            {watermarks.map((wm, idx) => (
+              <div
+                key={wm.id}
+                className={`wm-compact-item ${wm.id === selectedWatermarkId ? 'selected' : ''}`}
+                onClick={() => onSelectWatermark(wm.id)}
+              >
+                <span className="wm-idx">{idx + 1}</span>
+                <span className="wm-label">
+                  {wm.type === 'text' ? (wm.text || '文字').substring(0, 10) : '图片水印'}
+                </span>
+                <span className="wm-pos">{anchorNames[wm.anchor]}</span>
+                <button
+                  className="wm-del"
+                  onClick={(e) => { e.stopPropagation(); handleRemove(wm.id); }}
+                >×</button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* 保存模板对话框 */}
+      {/* 选中水印属性编辑 */}
+      {selectedWatermark && (
+        <div className="wm-properties">
+          <div className="section-title">属性</div>
+          <div className="prop-row">
+            <div className="anchor-grid">
+              {ANCHOR_GRID.map((pos) => (
+                <button
+                  key={pos}
+                  className={`anchor-dot ${selectedWatermark.anchor === pos ? 'active' : ''}`}
+                  onClick={() => updateSelected({ anchor: pos, offsetX: pos.includes('center') ? 0 : 30, offsetY: pos.includes('center') ? 0 : 30 })}
+                  title={anchorNames[pos]}
+                />
+              ))}
+            </div>
+            <div className="prop-fields">
+              <div className="prop-field">
+                <label>边距X</label>
+                <input type="number" value={selectedWatermark.offsetX}
+                  onChange={(e) => updateSelected({ offsetX: Number(e.target.value) })} min={0} />
+              </div>
+              <div className="prop-field">
+                <label>边距Y</label>
+                <input type="number" value={selectedWatermark.offsetY}
+                  onChange={(e) => updateSelected({ offsetY: Number(e.target.value) })} min={0} />
+              </div>
+            </div>
+          </div>
+          {selectedWatermark.type === 'text' && (
+            <div className="text-props">
+              <div className="prop-field full">
+                <label>文字</label>
+                <input type="text" value={selectedWatermark.text || ''}
+                  onChange={(e) => updateSelected({ text: e.target.value })} />
+              </div>
+              <div className="prop-row-inline">
+                <div className="prop-field">
+                  <label>字号</label>
+                  <input type="number" value={selectedWatermark.fontSize || 32}
+                    onChange={(e) => updateSelected({ fontSize: Number(e.target.value) })} min={12} max={200} />
+                </div>
+                <div className="prop-field">
+                  <label>颜色</label>
+                  <input type="color" value={selectedWatermark.color || '#ffffff'}
+                    onChange={(e) => updateSelected({ color: e.target.value })} />
+                </div>
+              </div>
+              <div className="prop-field full">
+                <label>字体</label>
+                <select value={selectedWatermark.fontFamily || 'Microsoft YaHei'}
+                  onChange={(e) => updateSelected({ fontFamily: e.target.value })}>
+                  {FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+          <div className="prop-field full">
+            <label>透明度: {selectedWatermark.opacity.toFixed(1)}</label>
+            <input type="range" value={selectedWatermark.opacity}
+              onChange={(e) => updateSelected({ opacity: Number(e.target.value) })} min={0} max={1} step={0.1} />
+          </div>
+        </div>
+      )}
+
+      {/* 模板按钮 */}
+      <div className="template-buttons">
+        <button className="btn-secondary btn-sm" onClick={() => setShowTemplateDialog(true)}>
+          模板库
+        </button>
+        {(watermarks.length > 0 || frameConfig) && (
+          <button className="btn-secondary btn-sm" onClick={() => setShowSaveDialog(true)}>
+            保存模板
+          </button>
+        )}
+      </div>
+
+      {/* 模板选择弹窗 */}
+      {showTemplateDialog && (
+        <div className="dialog-overlay" onClick={() => setShowTemplateDialog(false)}>
+          <div className="template-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-header">
+              <h4>模板库</h4>
+              <button className="dialog-close" onClick={() => setShowTemplateDialog(false)}>×</button>
+            </div>
+            {/* 分类筛选 */}
+            <div className="tpl-filter">
+              <button className={`filter-btn ${templateFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setTemplateFilter('all')}>全部</button>
+              <button className={`filter-btn ${templateFilter === 'frame' ? 'active' : ''}`}
+                onClick={() => setTemplateFilter('frame')}>边框</button>
+              <button className={`filter-btn ${templateFilter === 'overlay' ? 'active' : ''}`}
+                onClick={() => setTemplateFilter('overlay')}>叠加</button>
+              <button className={`filter-btn ${templateFilter === 'custom' ? 'active' : ''}`}
+                onClick={() => setTemplateFilter('custom')}>自定义</button>
+            </div>
+            <div className="template-grid-dialog">
+              {filteredTemplates.map((t) => (
+                <div key={t.id} className="template-card-dialog" onClick={() => handleApplyTemplate(t)}>
+                  {/* 预览 */}
+                  <div className={`tpl-preview ${t.mode === 'frame' ? 'frame-preview' : ''}`}>
+                    {t.mode === 'frame' && t.frameConfig && (
+                      <div className="frame-preview-content"
+                        style={{ backgroundColor: t.frameConfig.backgroundColor }}>
+                        <div className="fp-brand" style={{
+                          color: t.frameConfig.brandColor,
+                          fontSize: `${Math.min(t.frameConfig.brandFontSize * 0.6, 14)}px`,
+                          fontWeight: t.frameConfig.brandFontWeight,
+                          textAlign: t.frameConfig.layout === 'brand-center' ? 'center' : 'left',
+                        }}>
+                          {t.frameConfig.brandText}
+                        </div>
+                        {t.frameConfig.showParams && (
+                          <div className="fp-params" style={{ color: t.frameConfig.paramColor }}>
+                            {t.frameConfig.paramText.substring(0, 25)}
+                          </div>
+                        )}
+                        {t.frameConfig.showDate && (
+                          <div className="fp-date" style={{ color: t.frameConfig.dateColor }}>
+                            {formatDate(t.frameConfig.dateFormat)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {t.mode === 'overlay' && t.watermarks && (
+                      <>
+                        {t.watermarks.map((wm, idx) => {
+                          const previewW = 140;
+                          const previewH = 80;
+                          const itemW = Math.min(wm.width || 60, previewW * 0.6);
+                          const itemH = Math.min(wm.height || 16, previewH * 0.4);
+                          const { x, y } = calculatePosition(
+                            wm.anchor,
+                            Math.round(wm.offsetX * previewW / 800),
+                            Math.round(wm.offsetY * previewH / 600),
+                            previewW, previewH, itemW, itemH
+                          );
+                          return (
+                            <span key={idx} className="tpl-preview-item" style={{
+                              left: `${x}px`, top: `${y}px`,
+                              fontSize: `${Math.min((wm.fontSize || 16) * 0.4, 12)}px`,
+                              color: wm.color || '#fff',
+                              opacity: wm.opacity,
+                              transform: `rotate(${wm.rotation || 0}deg)`,
+                            }}>
+                              {wm.type === 'text' ? (wm.text || 'T').substring(0, 12) : '🖼'}
+                            </span>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                  <div className="tpl-info">
+                    <div className="tpl-name">{t.name}</div>
+                    <div className="tpl-desc">{t.description}</div>
+                  </div>
+                  {!t.isBuiltIn && (
+                    <button className="tpl-delete" onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteTemplate(t.id);
+                    }}>×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 保存模板弹窗 */}
       {showSaveDialog && (
         <div className="dialog-overlay" onClick={() => setShowSaveDialog(false)}>
           <div className="dialog" onClick={(e) => e.stopPropagation()}>
             <h4>保存为模板</h4>
-            <div className="form-item">
+            <div className="prop-field full">
               <label>模板名称</label>
-              <input
-                type="text"
-                value={newTemplateName}
+              <input type="text" value={newTemplateName}
                 onChange={(e) => setNewTemplateName(e.target.value)}
-                placeholder="输入模板名称"
-                autoFocus
-              />
-            </div>
-            <div className="form-item">
-              <label>模板描述</label>
-              <input
-                type="text"
-                value={newTemplateDesc}
-                onChange={(e) => setNewTemplateDesc(e.target.value)}
-                placeholder="简短描述（可选）"
-              />
+                placeholder="输入模板名称" autoFocus />
             </div>
             <div className="dialog-actions">
-              <button className="btn-secondary" onClick={() => setShowSaveDialog(false)}>
-                取消
-              </button>
-              <button
-                className="btn-primary"
-                onClick={handleSaveTemplate}
-                disabled={!newTemplateName.trim()}
-              >
-                保存
-              </button>
+              <button className="btn-secondary" onClick={() => setShowSaveDialog(false)}>取消</button>
+              <button className="btn-primary" onClick={handleSaveTemplate}
+                disabled={!newTemplateName.trim()}>保存</button>
             </div>
           </div>
         </div>
