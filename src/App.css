@@ -779,6 +779,31 @@ body {
   .anchor-dot { width: 16px; height: 16px; }
 }
 
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+  /* 防止误选文本 */
+  .app, .mobile-panel, .mobile-tabs, .watermark-panel {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* 画布允许触摸操作（拖拽水印） */
+  .canvas-container canvas {
+    touch-action: none;
+  }
+  /* 加大可点击区域 */
+  .quick-btn { min-height: 48px; }
+  .tab-btn { min-height: 52px; }
+  .wm-compact-item { padding: 10px 8px; }
+  .wm-del { padding: 4px 8px; font-size: 18px; }
+  .anchor-dot { width: 22px; height: 22px; }
+  .btn-primary, .btn-secondary { min-height: 40px; }
+  /* 输入框防止 iOS 自动放大（字号需 >=16px） */
+  input[type="text"], input[type="number"], select {
+    font-size: 16px !important;
+  }
+}
+
 /* ===== 滚动条 ===== */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg-color); }

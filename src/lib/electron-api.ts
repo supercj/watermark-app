@@ -1,7 +1,7 @@
 // Electron API 封装
 // 在浏览器环境提供模拟实现，在 Electron 环境使用真实 API
 
-const isElectron = typeof window !== 'undefined' && window.electronAPI;
+export const isElectron = typeof window !== 'undefined' && !!window.electronAPI;
 
 // 模拟 API（浏览器环境使用）
 const mockApi = {

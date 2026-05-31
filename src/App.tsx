@@ -111,6 +111,7 @@ function App() {
             <ExportPanel
               images={images}
               watermarks={watermarks}
+              frameConfig={frameConfig}
               settings={exportSettings}
               onSettingsChange={setExportSettings}
             />
@@ -165,6 +166,7 @@ function App() {
             <ExportPanel
               images={images}
               watermarks={watermarks}
+              frameConfig={frameConfig}
               settings={exportSettings}
               onSettingsChange={setExportSettings}
             />
