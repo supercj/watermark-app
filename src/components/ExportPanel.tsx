@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react';
-import { electronAPI } from '../lib/electron-api';
-import type { ExportSettings, WatermarkConfig, ImageItem } from '../types';
+import { electronAPI, isElectron } from '../lib/electron-api';
+import { composeImage, downloadBlob, buildFilename } from '../lib/export-image';
+import type { ExportSettings, WatermarkConfig, ImageItem, FrameConfig } from '../types';
 
 interface Props {
   images: ImageItem[];
   watermarks: WatermarkConfig[];
+  frameConfig: FrameConfig | null;
   settings: ExportSettings;
   onSettingsChange: (settings: ExportSettings) => void;
 }
@@ -12,6 +14,7 @@ interface Props {
 export function ExportPanel({
   images,
   watermarks,
+  frameConfig,
   settings,
   onSettingsChange,
 }: Props) {
@@ -26,22 +29,38 @@ export function ExportPanel({
     }
   }, [settings, onSettingsChange]);
 
+  const hasContent = watermarks.length > 0 || !!frameConfig;
+
   const handleExport = useCallback(async () => {
     if (images.length === 0) { alert('请先添加图片'); return; }
-    if (watermarks.length === 0) { alert('请先添加水印'); return; }
-    if (!settings.outputFolder) { alert('请选择输出目录'); return; }
+    if (!hasContent) { alert('请先添加水印或选择模板'); return; }
 
     setExporting(true);
     setProgress(0);
 
-    for (let i = 0; i < images.length; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      setProgress(Math.round(((i + 1) / images.length) * 100));
+    try {
+      // Web 环境：合成图片并逐张下载
+      for (let i = 0; i < images.length; i++) {
+        const blob = await composeImage(images[i], watermarks, frameConfig, settings);
+        const filename = buildFilename(
+          images[i].name,
+          i,
+          settings.format,
+          settings.preserveOriginal
+        );
+        downloadBlob(blob, filename);
+        setProgress(Math.round(((i + 1) / images.length) * 100));
+        // 给浏览器一点时间处理多文件下载
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      alert(`导出完成！共处理 ${images.length} 张图片`);
+    } catch (err) {
+      console.error(err);
+      alert(`导出失败: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setExporting(false);
     }
-
-    setExporting(false);
-    alert(`导出完成！共处理 ${images.length} 张图片`);
-  }, [images, watermarks, settings]);
+  }, [images, watermarks, frameConfig, settings, hasContent]);
 
   return (
     <div className="export-panel">
@@ -72,19 +91,22 @@ export function ExportPanel({
             min={1} max={100}
             className="quality-slider"
           />
-          <div className="export-row">
-            <button onClick={handleSelectFolder} className="btn-secondary btn-sm export-folder-btn">
-              {settings.outputFolder ? settings.outputFolder.split(/[/\\]/).pop() : '选择目录'}
-            </button>
-            <label className="checkbox-inline">
-              <input
-                type="checkbox"
-                checked={settings.preserveOriginal}
-                onChange={(e) => onSettingsChange({ ...settings, preserveOriginal: e.target.checked })}
-              />
-              保留原名
-            </label>
-          </div>
+          {/* 仅 Electron 环境显示输出目录选择，Web 走浏览器下载 */}
+          {isElectron && (
+            <div className="export-row">
+              <button onClick={handleSelectFolder} className="btn-secondary btn-sm export-folder-btn">
+                {settings.outputFolder ? settings.outputFolder.split(/[/\\]/).pop() : '选择目录'}
+              </button>
+            </div>
+          )}
+          <label className="checkbox-inline">
+            <input
+              type="checkbox"
+              checked={settings.preserveOriginal}
+              onChange={(e) => onSettingsChange({ ...settings, preserveOriginal: e.target.checked })}
+            />
+            保留原文件名
+          </label>
         </div>
       )}
 
